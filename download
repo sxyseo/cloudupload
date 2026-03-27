@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+# download - CloudUpload Server-Side Download Tool (极简下载器)
+# 用法:
+#   download relay <code> [output_file]    使用中转码下载
+#   download curl <url> [-o file]          直接 curl 下载
+#   download -h                           显示帮助
+#
+# 特点: 只需 curl/python3，无需任何云配置！
+
+set -e
+
+# Colors
+if [[ -t 1 ]]; then
+    RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' CYAN='\033[0;36m' NC='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' CYAN='' NC=''
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+QUIET="false"
+
+show_help() {
+    cat << 'EOF'
+CloudUpload 下载工具 - 服务器端极简下载器
+
+用法:
+    download relay <code> [output_file]    使用中转码下载
+    download curl <url> [-o file]        直接 curl 下载
+    download pipe <code>                 管道下载 (下载后输出到 stdout)
+    download -h                           显示帮助
+
+示例:
+    # 使用中转码下载（最常用）
+    download relay eyJwcm92aWRlciI6ImFsaXl1biIs...
+
+    # 指定输出文件名
+    download relay eyJwcm... myfile.tar.gz
+
+    # 管道下载 (自动解压 tar.gz)
+    download pipe eyJwcm... | tar xzf -
+
+    # 直接 curl 下载
+    download curl "https://bucket.endpoint/file?signature=..."
+
+环境变量:
+    DOWNLOAD_QUIET=1    静默模式
+    DOWNLOAD_TOOL=curl 强制使用 curl (不用 python3 解析)
+
+注意: 此脚本只需 curl 即可工作，无需任何云配置！
+EOF
+}
+
+# Check dependencies
+check_deps() {
+    if ! command -v curl &>/dev/null; then
+        echo -e "${RED}错误: curl 未安装${NC}" >&2
+        exit 1
+    fi
+}
+
+# Parse arguments
+CMD="" ARG1="" ARG2=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        relay)     CMD="relay"; ARG1="$2"; ARG2="$3"; shift $(( ARG2 ? 3 : 2 )) ;;
+        curl)      CMD="curl"; ARG1="$2"; ARG2="$3"; shift $(( ARG2 ? 3 : 2 )) ;;
+        pipe)      CMD="pipe"; ARG1="$2"; shift 2 ;;
+        -q|--quiet) QUIET="true"; shift ;;
+        -h|--help) show_help; exit 0 ;;
+        -*)        echo "未知选项: $1" >&2; show_help; exit 1 ;;
+        *)         echo "用法: download relay <code> [file]" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$CMD" ]]; then
+    show_help; exit 1
+fi
+
+# Check deps
+check_deps
+
+# Main dispatcher
+case "$CMD" in
+    relay) do_relay_download "$ARG1" "$ARG2" ;;
+    curl)  do_curl_download "$ARG1" "$ARG2" ;;
+    pipe)  do_pipe_download "$ARG1" ;;
+esac
+
+# ============================================================
+# 中转码下载
+# ============================================================
+do_relay_download() {
+    local relay_code="$1"
+    local output_file="$2"
+
+    if [[ -z "$relay_code" ]]; then
+        echo -e "${RED}用法: download relay <code> [output_file]${NC}" >&2
+        exit 1
+    fi
+
+    [[ "$QUIET" != "true" ]] && echo -e "${CYAN}=== CloudUpload 下载 ===${NC}"
+
+    # Decode relay code
+    local meta_json
+    if command -v python3 &>/dev/null || command -v python &>/dev/null; then
+        local python_cmd
+        python_cmd=$(command -v python3 || command -v python)
+        meta_json=$($python_cmd - "$relay_code" << 'PYEOF'
+import sys, json, base64, sys
+code = sys.argv[1]
+# Try URL-safe base64 first, then standard
+for try_b64 in ['base64.urlsafe_b64decode', 'base64.b64decode']:
+    try:
+        import base64 as b
+        data = b.urlsafe_b64decode(code.encode() + b.b64decode((code + '==').encode()).__class__())
+        # Actually just try standard
+        raw = b64decode(code + '=' * (4 - len(code) % 4))
+        obj = json.loads(raw)
+        print(json.dumps(obj, ensure_ascii=False))
+        sys.exit(0)
+    except: pass
+# Try standard base64
+try:
+    import base64 as b
+    raw = b.b64decode(code + '=' * (-len(code) % 4))
+    obj = json.loads(raw)
+    print(json.dumps(obj, ensure_ascii=False))
+except Exception as e:
+    print(f"ERROR:{e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+        2>&1
+        )
+    else
+        echo -e "${RED}错误: 需要 python3 来解析中转码${NC}" >&2
+        exit 1
+    fi
+
+    if [[ "$meta_json" == ERROR:* ]]; then
+        echo -e "${RED}解析中转码失败: ${meta_json#ERROR:}${NC}" >&2
+        exit 1
+    fi
+
+    if [[ -z "$meta_json" ]]; then
+        echo -e "${RED}解析中转码失败${NC}" >&2
+        exit 1
+    fi
+
+    # Extract fields
+    local download_url filename file_size expires
+    filename=$($python_cmd -c "import sys,json; d=json.load(sys.stdin); print(d.get('download_url',''))" \
+        <<< "$meta_json" 2>/dev/null)
+    filename=$($python_cmd -c "import sys,json; d=json.load(sys.stdin); print(d.get('filename','file'))" \
+        <<< "$meta_json" 2>/dev/null)
+    file_size=$($python_cmd -c "import sys,json; print(json.load(sys.stdin).get('size',0))" \
+        <<< "$meta_json" 2>/dev/null)
+    expires=$($python_cmd -c "import sys,json; print(json.load(sys.stdin).get('expires',0))" \
+        <<< "$meta_json" 2>/dev/null)
+
+    if [[ -z "$filename" || "$filename" == "file" ]]; then
+        filename="download"
+    fi
+
+    # Check expiry
+    local now
+    now=$(date +%s)
+    if [[ "$expires" =~ ^[0-9]+$ ]] && [[ $expires -lt $now ]]; then
+        echo -e "${RED}错误: 下载链接已过期${NC}" >&2
+        exit 1
+    fi
+
+    # Determine output file
+    if [[ -z "$output_file" ]]; then
+        output_file="$filename"
+    fi
+
+    [[ "$QUIET" != "true" ]] && echo "文件名: $filename"
+    [[ "$QUIET" != "true" ]] && echo "大小: $(_format_size "$file_size")"
+    [[ "$QUIET" != "true" ]] && echo "输出: $output_file"
+
+    # Download with curl
+    [[ "$QUIET" != "true" ]] && echo -e "${YELLOW}开始下载...${NC}"
+
+    local curl_args=("-fsSL")
+    [[ "$QUIET" != "true" ]] && curl_args=("-fSL")  # no progress if not TTY
+
+    if [[ -t 1 ]] && [[ "$QUIET" != "true" ]]; then
+        # Show progress
+        curl "${curl_args[@]}" "$download_url" -o "$output_file" --progress-bar
+    else
+        curl "${curl_args[@]}" "$download_url" -o "$output_file"
+    fi
+
+    if [[ $? -eq 0 ]]; then
+        [[ "$QUIET" != "true" ]] && echo -e "${GREEN}✓ 下载完成: $output_file${NC}"
+        echo "$output_file"
+    else
+        echo -e "${RED}✗ 下载失败${NC}" >&2
+        exit 1
+    fi
+}
+
+# ============================================================
+# 直接 curl 下载
+# ============================================================
+do_curl_download() {
+    local url="$1"
+    local output="$2"
+
+    if [[ -z "$url" ]]; then
+        echo -e "${RED}用法: download curl <url> [-o file]${NC}" >&2; exit 1
+    fi
+
+    if [[ "$url" == "-o" ]]; then
+        url="$ARG2"; output="$3"
+    fi
+
+    [[ "$QUIET" != "true" ]] && echo -e "${CYAN}=== 直接下载 ===${NC}"
+    [[ "$QUIET" != "true" ]] && echo "URL: $url"
+
+    if [[ -n "$output" ]]; then
+        curl -fsSL "$url" -o "$output" && echo -e "${GREEN}✓ 下载完成: $output${NC}"
+    else
+        curl -fsSL "$url" && echo -e "${GREEN}✓ 完成${NC}"
+    fi
+}
+
+# ============================================================
+# 管道下载 (输出到 stdout)
+# ============================================================
+do_pipe_download() {
+    local relay_code="$1"
+
+    if [[ -z "$relay_code" ]]; then
+        echo -e "${RED}用法: download pipe <code>${NC}" >&2; exit 1
+    fi
+
+    # Decode without python if possible - use base64 directly
+    local download_url
+    if command -v python3 &>/dev/null; then
+        download_url=$(python3 -c "
+import sys, json, base64
+try:
+    raw = base64.b64decode('$relay_code' + '=' * (-len('$relay_code') % 4))
+    d = json.loads(raw)
+    print(d.get('download_url', ''))
+except: pass
+" 2>/dev/null)
+    fi
+
+    if [[ -z "$download_url" ]]; then
+        echo -e "${RED}解析中转码失败${NC}" >&2; exit 1
+    fi
+
+    curl -fsSL "$download_url"
+}
+
+# ============================================================
+# Helper
+# ============================================================
+_format_size() {
+    local bytes="${1:-0}"
+    bytes=${bytes%%.*}  # integer
+    if   [[ $bytes -ge 1073741824 ]]; then
+        awk "BEGIN {printf \"%.1fG\", $bytes/1073741824}"
+    elif [[ $bytes -ge 1048576 ]]; then
+        awk "BEGIN {printf \"%.1fM\", $bytes/1048576}"
+    elif [[ $bytes -ge 1024 ]]; then
+        awk "BEGIN {printf \"%.1fK\", $bytes/1024}"
+    else
+        echo "${bytes}B"
+    fi
+}
