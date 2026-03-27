@@ -30,6 +30,7 @@ function Load-Config {
     $script:REGION      = _get $Profile "REGION"
     $script:URL_STYLE   = _get $Profile "URL_STYLE"
     $script:ACCOUNT     = _get $Profile "ACCOUNT"
+    $script:RELAY_EXPIRES = _get $Profile "RELAY_EXPIRES"
 
     if ([string]::IsNullOrEmpty($PROVIDER) -and [string]::IsNullOrEmpty($ENDPOINT) -and [string]::IsNullOrEmpty($BUCKET)) {
         Write-Error "Profile '$Profile' 在配置文件中未找到"
@@ -42,6 +43,7 @@ function Load-Config {
     # 标准化 endpoint
     $script:ENDPOINT = $ENDPOINT -replace '^https?://', '' -replace '/+$', ''
     $script:URL_STYLE = if ([string]::IsNullOrEmpty($URL_STYLE)) { "virtual" } else { $URL_STYLE }
+    if ([string]::IsNullOrEmpty($script:RELAY_EXPIRES)) { $script:RELAY_EXPIRES = "604800" }
 
     $script:CURRENT_PROFILE = $Profile
     return $true
@@ -99,6 +101,7 @@ function List-Profiles {
 }
 
 function Show-Config {
+    $expiresDays = [int]$script:RELAY_EXPIRES / 86400
     Write-Host "Profile:      $CURRENT_PROFILE"
     Write-Host "Provider:     $($PROVIDER ? $PROVIDER : '<未设置>')"
     Write-Host "Endpoint:     $($ENDPOINT ? $ENDPOINT : '<未设置>')"
@@ -106,6 +109,7 @@ function Show-Config {
     Write-Host "Region:       $($REGION ? $REGION : '<未设置>')"
     Write-Host "URL Style:    $URL_STYLE"
     Write-Host "Account:      $($ACCOUNT ? $ACCOUNT : '<未设置>')"
+    Write-Host "Relay Expires: $($expiresDays) days"
     Write-Host "Access Key:   $(if($ACCESS_KEY){'<已设置>'}else{'<未设置>'})"
     Write-Host "Secret Key:   $(if($SECRET_KEY){'<已设置>'}else{'<未设置>'})"
 }

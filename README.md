@@ -122,6 +122,71 @@ upload -s my-oss
 .\upload.ps1 -List
 ```
 
+### Cloud Relay: Upload from Local → Download to Server
+
+The relay feature solves the problem of slow direct uploads from local machine to server. Instead, upload locally to cloud storage (fast), then download to your server (fast).
+
+**Workflow:**
+```
+本地机器 ──上传──> 云存储 ──下载──> 服务器
+                       ↑
+                   (生成下载码/命令)
+```
+
+**Step 1: Upload locally (generates relay code)**
+
+```bash
+# 中转上传：本地 -> 云存储，生成下载命令
+upload relay myfile.tar.gz aliyun-oss
+
+# Output example:
+# ==============================================
+# ✓ 中转上传完成
+# ==============================================
+# 文件名: myfile.tar.gz
+# 文件大小: 125.0MB
+# 有效期: 7 天
+#
+# --- 服务器下载命令 ---
+#
+# 方式一: 一键下载命令
+#   curl -fsSL 'https://bucket.oss-cn-hangzhou...' | tar xzf -
+#
+# 方式二: 中转码下载
+#   download relay 'eyJwcm92aWRlciI6...'
+#
+# 方式三: 直接 curl
+#   curl -fsSL 'https://...' -o myfile.tar.gz
+```
+
+**Step 2: Download on server (no cloud config needed)**
+
+```bash
+# 服务器端：安装 download 工具后，一行命令下载
+curl -fsSL https://raw.githubusercontent.com/sxyseo/cloudupload/main/install.sh | bash
+
+# 使用中转码下载（只需 curl，无需任何云配置！）
+download relay eyJwcm92aWRlciI6...
+
+# 或直接用 curl 下载（复制 upload relay 输出的命令）
+curl -fsSL 'https://...' -o myfile.tar.gz
+
+# 管道下载（自动解压 tar.gz）
+curl -fsSL 'https://...' | tar xzf -
+```
+
+**Other Commands:**
+
+```bash
+# 列出云存储中的文件
+upload list
+upload list relay/          # 只列出中转目录
+
+# 生成分享链接
+upload share relay/uuid/myfile.tar.gz
+# Output: https://bucket.endpoint/file?Signature=...&X-Amz-Expires=604800
+```
+
 ### Dependency Requirements
 
 | Tool | Purpose | Required? |
@@ -336,6 +401,71 @@ upload -s my-oss
 .\upload.ps1 myfile.tar.gz my-oss
 .\upload.ps1 myfile.tar.gz -Quiet
 .\upload.ps1 -List
+```
+
+### 云中转：本地 → 云存储 → 服务器
+
+中转功能解决本地直传到服务器速度慢的问题。本地上传到云存储快（CDN加速），云存储下载到服务器也快（云厂商出带宽大）。
+
+**工作原理：**
+```
+本地机器 ──上传──> 云存储 ──下载──> 服务器
+                       ↑
+                   (生成下载码/命令)
+```
+
+**第一步：本地中转上传**
+
+```bash
+# 中转上传：本地 -> 云存储，生成下载命令
+upload relay myfile.tar.gz aliyun-oss
+
+# 输出示例：
+# ==============================================
+# ✓ 中转上传完成
+# ==============================================
+# 文件名: myfile.tar.gz
+# 文件大小: 125.0MB
+# 有效期: 7 天
+#
+# --- 服务器下载命令 ---
+#
+# 方式一: 一键下载命令
+#   curl -fsSL 'https://bucket.oss-cn-hangzhou...' | tar xzf -
+#
+# 方式二: 中转码下载（推荐）
+#   download relay 'eyJwcm92aWRlciI6...'
+#
+# 方式三: 直接 curl
+#   curl -fsSL 'https://...' -o myfile.tar.gz
+```
+
+**第二步：服务器下载（无需任何云配置）**
+
+```bash
+# 服务器安装 download 工具（一键）
+curl -fsSL https://raw.githubusercontent.com/sxyseo/cloudupload/main/install.sh | bash
+
+# 使用中转码下载（只需 curl，无需云配置！）
+download relay eyJwcm92aWRlciI6...
+
+# 或复制 upload relay 输出的命令直接执行
+curl -fsSL 'https://...' -o myfile.tar.gz
+
+# 管道下载（自动解压 tar.gz）
+curl -fsSL 'https://...' | tar xzf -
+```
+
+**其他命令：**
+
+```bash
+# 列出云存储中的文件
+upload list
+upload list relay/          # 只列出中转目录
+
+# 生成分享链接
+upload share relay/uuid/myfile.tar.gz
+# 输出: https://bucket.endpoint/file?Signature=...&X-Amz-Expires=604800
 ```
 
 ### 工具依赖

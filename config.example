@@ -11,6 +11,7 @@
 #   _REGION     区域（部分云必需）
 #   _URL_STYLE  URL 访问方式 (virtual|path)
 #   _ACCOUNT    特殊: Azure 存储账户名
+#   _RELAY_EXPIRES 预签名 URL 有效期（秒），默认 604800（7天）
 
 # ============================================================================
 # 默认 profile（可选，不指定 profile 时使用）
@@ -42,6 +43,8 @@ export aliyun-oss_ENDPOINT="oss-cn-hangzhou.aliyuncs.com"
 export aliyun-oss_BUCKET="your-bucket"
 export aliyun-oss_ACCESS_KEY="your-access-key-id"
 export aliyun-oss_SECRET_KEY="your-access-key-secret"
+# 预签名 URL 有效期（秒），默认 7 天 = 604800
+export aliyun-oss_RELAY_EXPIRES="604800"
 
 # ============================================================================
 # 腾讯云 COS

@@ -7,32 +7,20 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-QUIET="false" SHOW_LIST="false" SHOW_CONFIG="false"
-SHOW_HELP="false" SHOW_PROVIDERS="false" LANG_OPT=""
+QUIET="false" LANG_OPT="" SHOW_HELP="false"
 
-# Parse arguments
+# Subcommand: upload | relay | list | share
+SUBCMD="upload"
+
+# Parse global args first
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -q|--quiet)    QUIET="true"; shift ;;
-        -l|--list)     SHOW_LIST="true" ;;
-        -s|--show)     SHOW_CONFIG="true" ;;
-        -h|--help)     SHOW_HELP="true" ;;
-        --providers)   SHOW_PROVIDERS="true" ;;
-        -L|--lang)
-            LANG_OPT="$2"; shift 2 ;;
-        -*)
-            echo "未知选项: $1" >&2; SHOW_HELP="true" ;;
-        *)
-            if [[ "$SHOW_CONFIG" == "true" && -z "$PROFILE" && "${1}" != -* ]]; then
-                PROFILE="$1"
-            elif [[ -z "$FILE" && "${1}" != -* ]]; then
-                FILE="$1"
-            elif [[ -z "$REMOTE_KEY" && "${1}" != -* ]]; then
-                REMOTE_KEY="$1"
-            fi
-            ;;
+        -q|--quiet) QUIET="true"; shift ;;
+        -L|--lang) LANG_OPT="$2"; shift 2 ;;
+        -h|--help) SHOW_HELP="true"; shift ;;
+        -*) echo "未知选项: $1" >&2; SHOW_HELP="true"; shift ;;
+        *) break ;;
     esac
-    shift
 done
 
 # Initialize i18n
@@ -41,24 +29,48 @@ if [[ -f "$SCRIPT_DIR/i18n/i18n.sh" ]]; then
     i18n_init "$LANG_OPT"
 fi
 
+# Determine subcommand
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        upload|relay|list|share)
+            SUBCMD="$1"; shift ;;
+        -h|--help) SHOW_HELP="true" ;;
+        *) ;;  # file path starts with -, treat as file
+    esac
+fi
+
 show_help() {
     cat << 'EOF'
-CloudUpload - 一键上传文件到任意云存储
+CloudUpload - 一键上传文件到任意云存储 + 中转下载
 
 用法:
-    upload <文件> [profile] [远程路径]   上传文件
-    upload -l                            列出所有 profile
+    upload <文件> [profile] [远程路径]      上传文件
+    upload relay <文件> [profile]         中转上传：本地->云存储，生成下载码
+    upload list [prefix]                   列出云存储中的文件
+    upload share <远程路径>               生成分享链接（预签名 URL）
+    upload -l                              列出所有 profile
     upload -s [profile]                  显示配置信息
-    upload --providers                   显示支持的云厂商
-    upload -L <en|zh>                   设置语言
-    upload -h                            显示帮助
+    upload --providers                     显示支持的云厂商
+    upload -h                              显示帮助
 
 示例:
+    # 普通上传
     upload myfile.tar.gz                  使用默认 profile 上传
-    upload myfile.tar.gz aliyun-oss      使用 aliyun-oss profile 上传
+    upload myfile.tar.gz aliyun-oss      指定 profile
     upload myfile.tar.gz s3 backup/      上传到 backup/ 目录
     upload myfile.tar.gz -q              静默模式，只输出 URL
-    LANG=zh_CN.UTF-8 upload myfile.tar.gz  # 强制中文
+
+    # 中转上传（核心新功能）
+    upload relay myfile.tar.gz aliyun-oss  本地->云存储，生成下载命令
+    upload relay bigfile.tar.gz -q        静默模式
+
+    # 文件列表和分享
+    upload list                            列出所有文件
+    upload list relay/                     列出 relay 目录
+    upload share relay/uuid/file.tar.gz    生成预签名分享链接
+
+    # 服务器下载
+    download relay <code>                  服务器端下载（无需云配置）
 
 配置: ~/.uploadrc
 EOF
@@ -67,69 +79,67 @@ EOF
 main() {
     source "$SCRIPT_DIR/config.sh"
 
-    if [[ "$SHOW_LIST" == "true" ]]; then
-        echo "可用 profile:"
-        list_profiles
-        echo ""
-        list_providers
-        exit 0
-    fi
+    case "$SUBCMD" in
+        upload)
+            do_upload_main "$@"
+            ;;
+        relay)
+            do_relay_main "$@"
+            ;;
+        list)
+            do_list_main "$@"
+            ;;
+        share)
+            do_share_main "$@"
+            ;;
+    esac
+}
 
-    if [[ "$SHOW_PROVIDERS" == "true" ]]; then
-        list_providers
-        exit 0
-    fi
+# ======================
+# Upload subcommand
+# ======================
+do_upload_main() {
+    local FILE PROFILE REMOTE_KEY
+    FILE="" PROFILE="" REMOTE_KEY=""
 
-    if [[ "$SHOW_CONFIG" == "true" ]]; then
-        if ! load_config "$PROFILE"; then exit 1; fi
-        show_config; exit 0
-    fi
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -*)
+                echo "未知选项: $1" >&2; show_help; exit 1 ;;
+            *)
+                [[ -z "$FILE" ]] && FILE="$1" || \
+                [[ -z "$PROFILE" ]] && PROFILE="$1" || \
+                [[ -z "$REMOTE_KEY" ]] && REMOTE_KEY="$1"
+                ;;
+        esac
+        shift
+    done
 
-    if [[ "$SHOW_HELP" == "true" ]]; then
-        show_help; exit 0
-    fi
+    if [[ "$SHOW_HELP" == "true" ]]; then show_help; exit 0; fi
+    if [[ -z "$FILE" ]]; then show_help; exit 1; fi
 
-    if [[ -z "$FILE" ]]; then
-        show_help; exit 1
-    fi
-
-    # Resolve file path
-    if [[ "$FILE" != /* ]]; then
-        FILE="$(pwd)/$FILE"
-    fi
-
-    if [[ ! -f "$FILE" ]]; then
-        echo "错误: 文件不存在: $FILE" >&2; exit 1
-    fi
+    # Resolve path
+    if [[ "$FILE" != /* ]]; then FILE="$(pwd)/$FILE"; fi
+    if [[ ! -f "$FILE" ]]; then echo "错误: 文件不存在: $FILE" >&2; exit 1; fi
 
     local local_file="$FILE"
-    local local_name
-    local_name=$(basename "$local_file")
+    local local_name; local_name=$(basename "$local_file")
 
-    # Resolve remote key
-    if [[ -z "$REMOTE_KEY" ]]; then
-        REMOTE_KEY="$local_name"
-    elif [[ "$REMOTE_KEY" == */ ]]; then
-        REMOTE_KEY="${REMOTE_KEY}${local_name}"
-    fi
+    [[ -z "$REMOTE_KEY" ]] && REMOTE_KEY="$local_name" || \
+        [[ "$REMOTE_KEY" == */ ]] && REMOTE_KEY="${REMOTE_KEY}${local_name}"
 
-    # Load config
     if ! load_config "$PROFILE"; then exit 1; fi
 
     if [[ "$QUIET" != "true" ]]; then
-        echo "=== CloudUpload ==="
-        show_config
+        echo "=== CloudUpload ==="; show_config
     fi
 
-    # Detect tools
     source "$SCRIPT_DIR/lib/detect.sh"
     detect_tools "$PROVIDER"
-
     if ! check_upload_available "$PROVIDER"; then exit 1; fi
 
-    if [[ "$QUIET" != "true" ]]; then echo ""; fi
+    [[ "$QUIET" != "true" ]] && echo ""
 
-    # Route to provider
     case "$PROVIDER" in
         aws|minio)  source "$SCRIPT_DIR/lib/aws.sh";     do_upload "$local_file" "$REMOTE_KEY" ;;
         aliyun)     source "$SCRIPT_DIR/lib/aliyun.sh";  do_upload "$local_file" "$REMOTE_KEY" ;;
@@ -142,4 +152,76 @@ main() {
     esac
 }
 
-main
+# ======================
+# Relay subcommand
+# ======================
+do_relay_main() {
+    local FILE PROFILE
+    FILE="" PROFILE=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -*)
+                echo "未知选项: $1" >&2; show_help; exit 1 ;;
+            *)
+                [[ -z "$FILE" ]] && FILE="$1" || \
+                [[ -z "$PROFILE" ]] && PROFILE="$1"
+                ;;
+        esac
+        shift
+    done
+
+    if [[ -z "$FILE" ]]; then
+        echo "用法: upload relay <文件> [profile]" >&2
+        echo "示例: upload relay myfile.tar.gz aliyun-oss" >&2
+        exit 1
+    fi
+
+    # Resolve path
+    if [[ "$FILE" != /* ]]; then FILE="$(pwd)/$FILE"; fi
+    if [[ ! -f "$FILE" ]]; then echo "错误: 文件不存在: $FILE" >&2; exit 1; fi
+
+    if ! load_config "$PROFILE"; then exit 1; fi
+
+    source "$SCRIPT_DIR/lib/relay.sh"
+    source "$SCRIPT_DIR/lib/detect.sh"
+    detect_tools "$PROVIDER"
+
+    do_relay "$FILE"
+}
+
+# ======================
+# List subcommand
+# ======================
+do_list_main() {
+    local PREFIX="$1"
+    local PROFILE=""
+
+    if ! load_config "$PROFILE"; then exit 1; fi
+
+    source "$SCRIPT_DIR/lib/relay.sh"
+
+    do_list "$PREFIX"
+}
+
+# ======================
+# Share subcommand
+# ======================
+do_share_main() {
+    local REMOTE_KEY="$1"
+
+    if [[ -z "$REMOTE_KEY" ]]; then
+        echo "用法: upload share <远程路径>" >&2
+        echo "示例: upload share relay/uuid/file.tar.gz" >&2
+        exit 1
+    fi
+
+    local PROFILE=""
+    if ! load_config "$PROFILE"; then exit 1; fi
+
+    source "$SCRIPT_DIR/lib/relay.sh"
+
+    do_share "$REMOTE_KEY"
+}
+
+main "$@"

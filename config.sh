@@ -13,7 +13,7 @@ fi
 
 # Export config variables
 PROVIDER="" ENDPOINT="" BUCKET="" ACCESS_KEY="" SECRET_KEY="" REGION=""
-URL_STYLE="" CURRENT_PROFILE="" ACCOUNT=""
+URL_STYLE="" CURRENT_PROFILE="" ACCOUNT="" RELAY_EXPIRES=""
 
 load_config() {
     local profile="${1:-}"
@@ -45,6 +45,7 @@ load_config() {
     REGION=$(_get "REGION")
     URL_STYLE=$(_get "URL_STYLE")
     ACCOUNT=$(_get "ACCOUNT")
+    RELAY_EXPIRES=$(_get "RELAY_EXPIRES")
 
     # Check if profile exists
     if [[ -z "$PROVIDER" && -z "$ENDPOINT" && -z "$BUCKET" ]]; then
@@ -62,8 +63,9 @@ load_config() {
 
     # Defaults
     URL_STYLE="${URL_STYLE:-virtual}"
+    RELAY_EXPIRES="${RELAY_EXPIRES:-604800}"  # 7 days default
 
-    export PROVIDER ENDPOINT BUCKET ACCESS_KEY SECRET_KEY REGION URL_STYLE ACCOUNT
+    export PROVIDER ENDPOINT BUCKET ACCESS_KEY SECRET_KEY REGION URL_STYLE ACCOUNT RELAY_EXPIRES
     export CURRENT_PROFILE="$profile"
 
     return 0
@@ -103,6 +105,8 @@ list_profiles() {
 }
 
 show_config() {
+    local expires_days
+    expires_days=$((RELAY_EXPIRES / 86400))
     echo "Profile:      $CURRENT_PROFILE"
     echo "Provider:     ${PROVIDER:-<未设置>}"
     echo "Endpoint:     ${ENDPOINT:-<未设置>}"
@@ -110,6 +114,7 @@ show_config() {
     echo "Region:       ${REGION:-<未设置>}"
     echo "URL Style:    $URL_STYLE"
     echo "Account:      ${ACCOUNT:-<未设置>}"
+    echo "Relay Expires:${expires_days} days"
     echo "Access Key:   ${ACCESS_KEY:+<已设置>}"
     echo "Secret Key:   ${SECRET_KEY:+<已设置>}"
 }

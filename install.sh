@@ -45,7 +45,7 @@ install_shell() {
     mkdir -p "$BIN_DIR"
 
     # Files to copy
-    local main_files=("upload" "config.sh" "config.ps1" "upload.ps1" "install.sh" "install.ps1" "config.example")
+    local main_files=("upload" "download" "config.sh" "config.ps1" "upload.ps1" "install.sh" "install.ps1" "config.example")
     for f in "${main_files[@]}"; do
         if [[ -f "$SCRIPT_DIR/$f" ]]; then
             cp "$SCRIPT_DIR/$f" "$INSTALL_DIR/$f"
@@ -68,13 +68,17 @@ install_shell() {
     fi
 
     # Set executable
-    chmod +x "$INSTALL_DIR/upload" "$INSTALL_DIR/install.sh"
+    chmod +x "$INSTALL_DIR/upload" "$INSTALL_DIR/download" "$INSTALL_DIR/install.sh"
     find "$INSTALL_DIR/lib" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
-    # Create symlink
+    # Create symlinks
     if [[ ! -e "$BIN_DIR/upload" ]]; then
         ln -sf "$INSTALL_DIR/upload" "$BIN_DIR/upload"
         success "已创建符号链接: $BIN_DIR/upload"
+    fi
+    if [[ ! -e "$BIN_DIR/download" ]]; then
+        ln -sf "$INSTALL_DIR/download" "$BIN_DIR/download"
+        success "已创建符号链接: $BIN_DIR/download"
     fi
 
     # Check PATH
@@ -179,8 +183,11 @@ main() {
     echo "====================================="
     echo ""
     echo "使用示例:"
-    echo "  upload myfile.tar.gz                  # 使用默认 profile"
-    echo "  upload myfile.tar.gz aliyun-oss       # 指定 profile"
+    echo "  upload myfile.tar.gz                  # 上传到云存储"
+    echo "  upload relay myfile.tar.gz            # 中转上传，生成下载码"
+    echo "  upload list                           # 列出云存储文件"
+    echo "  upload share relay/file.tar.gz        # 生成分享链接"
+    echo "  download relay <code>                # 服务器下载（服务器端）"
     echo "  upload -l                             # 列出所有 profile"
     echo "  upload -h                             # 显示帮助"
     echo ""
