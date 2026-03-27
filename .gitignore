@@ -1,0 +1,37 @@
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+.DS_Store
+Thumbs.db
+
+# Test configs
+*test*.uploadrc
+.testrc
+
+# Downloaded tools
+awscliv2.zip
+aws/
+ossutil*
+
+# Build artifacts
+dist/
+build/
+*.zip
+*.tar.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store

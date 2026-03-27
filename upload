@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# upload - CloudUpload: one command to upload to any cloud storage (Unix/Linux/macOS)
+# Supports: AWS S3, Alibaba Cloud OSS, Tencent Cloud COS, Baidu Cloud BOS,
+#           Huawei Cloud OBS, Google Cloud GCS, Azure Blob, MinIO
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+QUIET="false" SHOW_LIST="false" SHOW_CONFIG="false"
+SHOW_HELP="false" SHOW_PROVIDERS="false" LANG_OPT=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -q|--quiet)    QUIET="true"; shift ;;
+        -l|--list)     SHOW_LIST="true" ;;
+        -s|--show)     SHOW_CONFIG="true" ;;
+        -h|--help)     SHOW_HELP="true" ;;
+        --providers)   SHOW_PROVIDERS="true" ;;
+        -L|--lang)
+            LANG_OPT="$2"; shift 2 ;;
+        -*)
+            echo "未知选项: $1" >&2; SHOW_HELP="true" ;;
+        *)
+            if [[ "$SHOW_CONFIG" == "true" && -z "$PROFILE" && "${1}" != -* ]]; then
+                PROFILE="$1"
+            elif [[ -z "$FILE" && "${1}" != -* ]]; then
+                FILE="$1"
+            elif [[ -z "$REMOTE_KEY" && "${1}" != -* ]]; then
+                REMOTE_KEY="$1"
+            fi
+            ;;
+    esac
+    shift
+done
+
+# Initialize i18n
+if [[ -f "$SCRIPT_DIR/i18n/i18n.sh" ]]; then
+    source "$SCRIPT_DIR/i18n/i18n.sh"
+    i18n_init "$LANG_OPT"
+fi
+
+show_help() {
+    cat << 'EOF'
+CloudUpload - 一键上传文件到任意云存储
+
+用法:
+    upload <文件> [profile] [远程路径]   上传文件
+    upload -l                            列出所有 profile
+    upload -s [profile]                  显示配置信息
+    upload --providers                   显示支持的云厂商
+    upload -L <en|zh>                   设置语言
+    upload -h                            显示帮助
+
+示例:
+    upload myfile.tar.gz                  使用默认 profile 上传
+    upload myfile.tar.gz aliyun-oss      使用 aliyun-oss profile 上传
+    upload myfile.tar.gz s3 backup/      上传到 backup/ 目录
+    upload myfile.tar.gz -q              静默模式，只输出 URL
+    LANG=zh_CN.UTF-8 upload myfile.tar.gz  # 强制中文
+
+配置: ~/.uploadrc
+EOF
+}
+
+main() {
+    source "$SCRIPT_DIR/config.sh"
+
+    if [[ "$SHOW_LIST" == "true" ]]; then
+        echo "可用 profile:"
+        list_profiles
+        echo ""
+        list_providers
+        exit 0
+    fi
+
+    if [[ "$SHOW_PROVIDERS" == "true" ]]; then
+        list_providers
+        exit 0
+    fi
+
+    if [[ "$SHOW_CONFIG" == "true" ]]; then
+        if ! load_config "$PROFILE"; then exit 1; fi
+        show_config; exit 0
+    fi
+
+    if [[ "$SHOW_HELP" == "true" ]]; then
+        show_help; exit 0
+    fi
+
+    if [[ -z "$FILE" ]]; then
+        show_help; exit 1
+    fi
+
+    # Resolve file path
+    if [[ "$FILE" != /* ]]; then
+        FILE="$(pwd)/$FILE"
+    fi
+
+    if [[ ! -f "$FILE" ]]; then
+        echo "错误: 文件不存在: $FILE" >&2; exit 1
+    fi
+
+    local local_file="$FILE"
+    local local_name
+    local_name=$(basename "$local_file")
+
+    # Resolve remote key
+    if [[ -z "$REMOTE_KEY" ]]; then
+        REMOTE_KEY="$local_name"
+    elif [[ "$REMOTE_KEY" == */ ]]; then
+        REMOTE_KEY="${REMOTE_KEY}${local_name}"
+    fi
+
+    # Load config
+    if ! load_config "$PROFILE"; then exit 1; fi
+
+    if [[ "$QUIET" != "true" ]]; then
+        echo "=== CloudUpload ==="
+        show_config
+    fi
+
+    # Detect tools
+    source "$SCRIPT_DIR/lib/detect.sh"
+    detect_tools "$PROVIDER"
+
+    if ! check_upload_available "$PROVIDER"; then exit 1; fi
+
+    if [[ "$QUIET" != "true" ]]; then echo ""; fi
+
+    # Route to provider
+    case "$PROVIDER" in
+        aws|minio)  source "$SCRIPT_DIR/lib/aws.sh";     do_upload "$local_file" "$REMOTE_KEY" ;;
+        aliyun)     source "$SCRIPT_DIR/lib/aliyun.sh";  do_upload "$local_file" "$REMOTE_KEY" ;;
+        tencent)    source "$SCRIPT_DIR/lib/tencent.sh"; do_upload "$local_file" "$REMOTE_KEY" ;;
+        baidu)      source "$SCRIPT_DIR/lib/baidu.sh";   do_upload "$local_file" "$REMOTE_KEY" ;;
+        huawei)     source "$SCRIPT_DIR/lib/huawei.sh";  do_upload "$local_file" "$REMOTE_KEY" ;;
+        gcp)        source "$SCRIPT_DIR/lib/gcp.sh";     do_upload "$local_file" "$REMOTE_KEY" ;;
+        azure)      source "$SCRIPT_DIR/lib/azure.sh";   do_upload "$local_file" "$REMOTE_KEY" ;;
+        *)          echo "错误: 不支持的 provider: $PROVIDER" >&2; exit 1 ;;
+    esac
+}
+
+main

@@ -1,0 +1,120 @@
+# CloudUpload 配置文件示例
+# 复制此文件到 ~/.uploadrc 并填入你的配置
+# 支持多 profile，每个 profile 使用 {NAME}_ 前缀区分
+#
+# 通用变量后缀:
+#   _PROVIDER   云厂商类型 (aws|aliyun|tencent|baidu|huawei|gcp|azure|minio)
+#   _ENDPOINT   API 端点地址
+#   _BUCKET     存储桶/容器名称
+#   _ACCESS_KEY Access Key / Account Name
+#   _SECRET_KEY Secret Key
+#   _REGION     区域（部分云必需）
+#   _URL_STYLE  URL 访问方式 (virtual|path)
+#   _ACCOUNT    特殊: Azure 存储账户名
+
+# ============================================================================
+# 默认 profile（可选，不指定 profile 时使用）
+# ============================================================================
+export UPLOAD_DEFAULT="aws-main"
+
+# ============================================================================
+# AWS S3
+# ============================================================================
+# provider: aws (S3, S3 兼容存储通用)
+# 官方 CLI: pip install awscli
+
+export aws-main_PROVIDER="aws"
+export aws-main_REGION="us-east-1"
+export aws-main_BUCKET="your-bucket"
+export aws-main_ACCESS_KEY="AKIAXXXXXXXXXXXXXXXX"
+export aws-main_SECRET_KEY="your-secret-key-here"
+export aws-main_URL_STYLE="virtual"
+
+# ============================================================================
+# 阿里云 OSS
+# ============================================================================
+# provider: aliyun
+# 官方 CLI: wget https://gosspublic.alicdn.com/ossutil/ossutil64 -O /usr/local/bin/ossutil
+# Python SDK: pip install oss2
+
+export aliyun-oss_PROVIDER="aliyun"
+export aliyun-oss_ENDPOINT="oss-cn-hangzhou.aliyuncs.com"
+export aliyun-oss_BUCKET="your-bucket"
+export aliyun-oss_ACCESS_KEY="your-access-key-id"
+export aliyun-oss_SECRET_KEY="your-access-key-secret"
+
+# ============================================================================
+# 腾讯云 COS
+# ============================================================================
+# provider: tencent
+# 官方 CLI: pip install cos-python-cli
+
+export tencent-cos_PROVIDER="tencent"
+export tencent-cos_ENDPOINT="cos.ap-guangzhou.myqcloud.com"
+export tencent-cos_BUCKET="your-bucket-1250000000"
+export tencent-cos_ACCESS_KEY="your-secret-id"
+export tencent-cos_SECRET_KEY="your-secret-key"
+export tencent-cos_REGION="ap-guangzhou"
+
+# ============================================================================
+# 百度云 BOS
+# ============================================================================
+# provider: baidu
+# 官方 CLI: pip install baidubce
+
+export baidu-bos_PROVIDER="baidu"
+export baidu-bos_ENDPOINT="bj.bcebos.com"
+export baidu-bos_BUCKET="your-bucket"
+export baidu-bos_ACCESS_KEY="your-access-key-id"
+export baidu-bos_SECRET_KEY="your-access-key-secret"
+
+# ============================================================================
+# 华为云 OBS
+# ============================================================================
+# provider: huawei
+# 官方 CLI: wget https://obs-community.obs.cn-north-4.myhuaweicloud.com/obsutil/obsutil_latest_linux_amd64.tar.gz
+
+export huawei-obs_PROVIDER="huawei"
+export huawei-obs_ENDPOINT="obs.cn-south-1.myhuaweicloud.com"
+export huawei-obs_BUCKET="your-bucket"
+export huawei-obs_ACCESS_KEY="your-access-key-id"
+export huawei-obs_SECRET_KEY="your-access-key-secret"
+
+# ============================================================================
+# 谷歌云 GCS
+# ============================================================================
+# provider: gcp
+# 官方 CLI: pip install gsutil
+# Python SDK: pip install google-cloud-storage
+# 凭证: ACCESS_KEY = service account email, SECRET_KEY = private key (完整 JSON 或仅 private_key 字段)
+
+export gcp-gcs_PROVIDER="gcp"
+export gcp-gcs_BUCKET="your-bucket"
+export gcp-gcs_ACCESS_KEY="your-service-account@project.iam.gserviceaccount.com"
+export gcp-gcs_SECRET_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"
+
+# ============================================================================
+# Azure Blob Storage
+# ============================================================================
+# provider: azure
+# 官方 CLI: pip install azure-cli
+# Python SDK: pip install azure-storage-blob
+
+export azure-blob_PROVIDER="azure"
+export azure-blob_ACCOUNT="yourstorageaccount"
+export azure-blob_BUCKET="your-container"
+export azure-blob_ACCESS_KEY="your-storage-account-key"
+export azure-blob_ENDPOINT="blob.core.windows.net"
+
+# ============================================================================
+# MinIO / S3 兼容存储
+# ============================================================================
+# provider: minio
+# 使用 AWS CLI 协议连接
+
+export minio-local_PROVIDER="minio"
+export minio-local_ENDPOINT="localhost:9000"
+export minio-local_BUCKET="mybucket"
+export minio-local_ACCESS_KEY="minioadmin"
+export minio-local_SECRET_KEY="minioadmin"
+export minio-local_URL_STYLE="path"

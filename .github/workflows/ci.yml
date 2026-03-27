@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  shell-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint shell scripts
+        run: |
+          find . -name "*.sh" -not -path "./.github/*" | while read f; do
+            echo "Linting: $f"
+            shellcheck -s bash -x "$f" || true
+          done
+
+      - name: Syntax check shell scripts
+        run: |
+          for f in $(find . -name "*.sh" -not -path "./.github/*"); do
+            bash -n "$f" || { echo "FAIL: $f"; exit 1; }
+          done
+
+  readme-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check README exists and has content
+        run: |
+          test -f README.md || { echo "README.md missing"; exit 1; }
+          test $(wc -l < README.md) -ge 50 || { echo "README.md too short"; exit 1; }
+
+      - name: Check config.example has all providers
+        run: |
+          grep -q "aws" config.example || exit 1
+          grep -q "aliyun" config.example || exit 1
+          grep -q "tencent" config.example || exit 1
+          grep -q "baidu" config.example || exit 1
+          grep -q "huawei" config.example || exit 1
+          grep -q "gcp" config.example || exit 1
+          grep -q "azure" config.example || exit 1
+          grep -q "minio" config.example || exit 1
+
+  file-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          test -f upload || exit 1
+          test -f upload.ps1 || exit 1
+          test -f config.sh || exit 1
+          test -f config.ps1 || exit 1
+          test -f install.sh || exit 1
+          test -f config.example || exit 1
+          test -f LICENSE || exit 1
+          test -f README.md || exit 1
+          test -d lib || exit 1
+          test -d i18n || exit 1
+
+      - name: Check all providers have both sh and ps1
+        run: |
+          for p in aws aliyun tencent baidu huawei gcp azure; do
+            test -f "lib/${p}.sh" || { echo "Missing lib/${p}.sh"; exit 1; }
+            test -f "lib/${p}.ps1" || { echo "Missing lib/${p}.ps1"; exit 1; }
+          done

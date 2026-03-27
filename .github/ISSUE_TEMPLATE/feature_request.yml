@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature] "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Description
+        A clear description of the feature you want.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+      description: "Why do you need this feature? What problem does it solve?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "What alternatives have you considered?"
+    validations:
+      required: false
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: "Use Case"
+      description: "Describe a specific use case for this feature"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: "Related Cloud Provider (if any)"
+      options:
+        - None / General
+        - AWS S3
+        - Alibaba Cloud OSS
+        - Tencent Cloud COS
+        - Baidu Cloud BOS
+        - Huawei Cloud OBS
+        - Google Cloud GCS
+        - Azure Blob Storage
+        - MinIO
+        - Other

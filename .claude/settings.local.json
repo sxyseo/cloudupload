@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x upload.sh config.sh lib/*.sh)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(bash -n \"$f\")",
+      "Bash(done)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh -s test)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh -s test2)",
+      "Bash(bash -n upload.sh)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash -x upload.sh -s test2)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh -l)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh -s)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh -h)",
+      "Bash(touch /tmp/testfile.txt)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload.sh /tmp/testfile.txt test)",
+      "Bash(chmod +x install.sh upload)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload -l)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload -s gcp)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload -s azure)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload /tmp/testfile.txt test)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash -x upload /tmp/testfile.txt test)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload /tmp/testfile.txt -q)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload --providers)",
+      "Bash(UPLOAD_CONFIG_FILE=/tmp/test.uploadrc bash upload /tmp/testfile.txt oss backup/)",
+      "Bash(echo \"Exit: $?\")"
+    ]
+  }
+}
